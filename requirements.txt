@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+yfinance
+jinja2
+pandas
+matplotlib
+streamlit
+investpy
+requests
+plotly
+streamlit-autorefresh

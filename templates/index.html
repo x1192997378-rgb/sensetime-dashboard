@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>商汤-W 实时看板</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #1e293b;
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    .title {
+      font-size: 24px;
+      margin: 0 0 12px;
+    }
+    .quote {
+      display: flex;
+      gap: 24px;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+    .price {
+      font-size: 40px;
+      font-weight: 700;
+    }
+    .up { color: #22c55e; }
+    .down { color: #ef4444; }
+    .meta {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .chart {
+      height: 320px;
+      width: 100%;
+    }
+    .small {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1 class="title">港股 {{ symbol }}（商汤-W）实时报价看板</h1>
+      <div class="quote">
+        <div id="price" class="price">--</div>
+        <div id="change">--</div>
+      </div>
+      <p id="updatedAt" class="meta">更新时间：--</p>
+      <p id="note" class="small"></p>
+    </div>
+
+    <div class="card">
+      <h2>实时成交量（1分钟）</h2>
+      <div id="volumeChart" class="chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>实时成交额（成交量 * 收盘价）</h2>
+      <div id="amountChart" class="chart"></div>
+    </div>
+  </div>
+
+  <script>
+    const volumeChart = echarts.init(document.getElementById("volumeChart"));
+    const amountChart = echarts.init(document.getElementById("amountChart"));
+
+    function baseOption(title, yName, color) {
+      return {
+        backgroundColor: "#1e293b",
+        animation: false,
+        tooltip: { trigger: "axis" },
+        grid: { left: 50, right: 24, top: 34, bottom: 40 },
+        xAxis: {
+          type: "category",
+          data: [],
+          axisLabel: { color: "#94a3b8", interval: "auto" },
+          axisLine: { lineStyle: { color: "#334155" } },
+        },
+        yAxis: {
+          type: "value",
+          name: yName,
+          nameTextStyle: { color: "#94a3b8" },
+          axisLabel: { color: "#94a3b8" },
+          splitLine: { lineStyle: { color: "#334155" } },
+        },
+        series: [{
+          type: "line",
+          smooth: true,
+          showSymbol: false,
+          lineStyle: { width: 2, color: color },
+          areaStyle: { color: color, opacity: 0.15 },
+          data: [],
+        }],
+      };
+    }
+
+    volumeChart.setOption(baseOption("成交量", "手", "#38bdf8"));
+    amountChart.setOption(baseOption("成交额", "HKD", "#f59e0b"));
+
+    function updateQuote(quote) {
+      const priceEl = document.getElementById("price");
+      const changeEl = document.getElementById("change");
+      const delta = Number(quote.change || 0);
+      const pct = Number(quote.change_percent || 0);
+      priceEl.textContent = Number(quote.price || 0).toFixed(3);
+      changeEl.textContent = `${delta >= 0 ? "+" : ""}${delta.toFixed(3)} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`;
+      changeEl.className = delta >= 0 ? "up" : "down";
+      priceEl.className = `price ${delta >= 0 ? "up" : "down"}`;
+    }
+
+    function updateCharts(series) {
+      const labels = series.labels || [];
+      const volume = series.volume || [];
+      const amount = series.amount || [];
+
+      volumeChart.setOption({
+        xAxis: { data: labels },
+        series: [{ data: volume }],
+      });
+      amountChart.setOption({
+        xAxis: { data: labels },
+        series: [{ data: amount }],
+      });
+    }
+
+    async function fetchRealtime() {
+      try {
+        const resp = await fetch("/api/realtime");
+        const data = await resp.json();
+        if (data.error) {
+          document.getElementById("note").textContent = `数据拉取失败: ${data.detail || data.error}`;
+          return;
+        }
+        updateQuote(data.quote || {});
+        updateCharts(data.series || {});
+        document.getElementById("updatedAt").textContent = `更新时间：${data.updated_at}`;
+        document.getElementById("note").textContent = data.note || "";
+      } catch (err) {
+        document.getElementById("note").textContent = `请求异常: ${err}`;
+      }
+    }
+
+    fetchRealtime();
+    setInterval(fetchRealtime, 5000);
+    window.addEventListener("resize", () => {
+      volumeChart.resize();
+      amountChart.resize();
+    });
+  </script>
+</body>
+</html>
